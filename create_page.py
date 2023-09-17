@@ -5,7 +5,7 @@ import random
 import re
 import shutil
 import urllib.parse
-from typing import List, Final
+from typing import List, Final, Union
 
 import click
 import js2py
@@ -53,17 +53,19 @@ def encrypt_html(original_filename: str, key: str) -> str:
 
     with open(original_filename, "r", encoding="ISO-8859-1") as original_page:
         soup = BeautifulSoup(original_page.read(), "html.parser")
-        original_title = soup.title.get_text()
-        original_body = soup.body.decode_contents()
+        original_title = soup.title.get_text() if soup.title else ""
+        original_body = soup.body.decode_contents() if soup.body else ""
 
     _, tempfile = js2py.run_file("./js/CryptoJS.js")
 
-    encrypted_title = tempfile.encrypt(original_title, key)
-    soup.title.string.replace_with(encrypted_title)
+    if original_title:
+        encrypted_title = tempfile.encrypt(original_title, key)
+        soup.title.string.replace_with(encrypted_title)
 
-    encrypted_body = soup.new_tag("body")
-    encrypted_body.string = tempfile.encrypt(original_body, key)
-    soup.body.replace_with(encrypted_body)
+    if original_body:
+        encrypted_body = soup.new_tag("body")
+        encrypted_body.string = tempfile.encrypt(original_body, key)
+        soup.body.replace_with(encrypted_body)
 
     insert_script("../../js/CryptoJS.js")
     insert_script("../../js/decode_page.js")
@@ -91,10 +93,21 @@ def add_links(filename: str, key: str) -> None:
         file_object.write("---------------------------\n")
 
 
-def create_file(filename: str, inputs: str) -> None:
+def crypt_image(original_filename: str, key: str) -> bytearray:
+    with open(original_filename, "rb") as file:
+        image = bytearray(file.read())
+
+    key = bytes(key, "utf-8")
+    for index, values in enumerate(image):
+        image[index] = values ^ key[index % len(key)]
+    return image
+
+
+def create_file(filename: str, inputs: Union[str, bytearray]) -> None:
     logging.info(f"Create file {filename}")
+    mode = "w" if type(inputs) == str else "wb"
     os.makedirs(os.path.dirname(filename), exist_ok=True)
-    with open(filename, "w") as file:
+    with open(filename, mode) as file:
         file.write(inputs)
 
 
@@ -128,6 +141,10 @@ def main(path: str, key: str) -> None:
             encrypted_html = encrypt_html(original_filename, key)
             create_file(filename, encrypted_html)
             add_links(filename, key)
+        elif original_filename.endswith(".jpg") or \
+                original_filename.endswith(".png"):
+            encrypted_image = crypt_image(original_filename, key)
+            create_file(filename, encrypted_image)
         else:
             logging.info(f"Found non html file {original_filename} - copy it")
             copy_file(original_filename, filename)
