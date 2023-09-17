@@ -142,7 +142,8 @@ def main(path: str, key: str) -> None:
             create_file(filename, encrypted_html)
             add_links(filename, key)
         elif original_filename.endswith(".jpg") or \
-                original_filename.endswith(".png"):
+                original_filename.endswith(".png") or \
+                original_filename.endswith(".gif"):
             encrypted_image = crypt_image(original_filename, key)
             create_file(filename, encrypted_image)
         else:
